@@ -1,0 +1,52 @@
+#!/bin/bash
+
+SERIAL_PATH="/dev/ttyACM0"
+SINK_COUNT=4
+SINK_IDS=()
+
+initialize() {
+	echo "Creating Sinks"
+
+	for (( i=0; i<$SINK_COUNT; i++ ))
+	do
+		SINK_IDS[$i]=$(pactl load-module module-null-sink media.class=Audio/Sink sink_name=Device$i channel_map=stereo)
+	done
+}
+
+quit() {
+	echo "Removing Sinks"
+	
+	for id in "${SINK_IDS[@]}"
+	do
+		pactl unload-module $id
+	done
+	
+	exit
+}
+
+setVolume() {
+	echo "Setting volume for Sink $1 to $2"
+
+	pactl set-sink-volume Device$1 $2
+}
+
+readSerial() {
+	while read line; do
+		TEMP=0
+		for vol in $line
+		do
+			case $vol in
+				''|*[!0-9]*) echo Ignoring incorrect value ;;
+				*) setVolume $TEMP $vol ;;
+			esac
+
+			TEMP=$((TEMP+1))
+		done
+	done < $SERIAL_PATH
+}
+
+trap quit SIGINT SIGTERM
+
+initialize
+readSerial
+quit
